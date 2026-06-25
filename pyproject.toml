@@ -6,11 +6,14 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "langchain-core>=1.4.8",
-    "langchain[google-genai]>=1.3.11",
+    "langchain[openai]>=1.3.11",
     "langgraph>=1.2.6",
     "pydantic-settings>=2.14.2",
     "rich>=15.0.0",
 ]
+
+[dependency-groups]
+dev = ["taskipy>=1.14.1", "langgraph-cli[inmem]>=0.4.30"]
 
 [tool.ruff.lint]
 ignore = [
@@ -44,3 +47,7 @@ exclude = [
 venv = ".venv"
 venvPath = "."
 executionEnvironments = [{ root = "src" }]
+
+[tool.taskipy.tasks]
+main = "uv run --env-file=.env main.py"
+langsmith = "uv run --env-file=.env langgraph dev --config ./langgraph.json"
