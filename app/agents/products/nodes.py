@@ -2,7 +2,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
 from app.agents.products.constants import Nodes
-from app.agents.products.prompt import EXTRACT_REQUIREMENTS_PROMPT
+from app.agents.products.prompt import (
+    ASK_REQUIREMENTS_PROMPT,
+    EXTRACT_REQUIREMENTS_PROMPT,
+)
 from app.agents.products.schemas import (
     CollectedInfo,
     Product,
@@ -46,28 +49,33 @@ async def _extract_info(messages: list) -> CollectedInfo:
     return info
 
 
-def _next_question(info: CollectedInfo) -> str | None:
-    """Retorna a próxima pergunta a fazer, ou None se já há dados suficientes."""
+async def _next_question(info: CollectedInfo, messages: list) -> str | None:
+    """Gera a próxima pergunta com base no contexto, ou None se já há dados suficientes."""
     if not info.to_requirements().is_complete:
-        return (
-            'Para eu te ajudar a achar o melhor produto: que tipo de produto você procura '
-            'e para que vai usar? Tem alguma característica mais importante (ex.: câmera, '
-            'bateria, desempenho)?'
+        missing = (
+            'que tipo de produto ele procura, para que vai usar e quais características '
+            'são mais importantes'
         )
+    elif info.budget is None:
+        missing = 'o orçamento máximo em reais (BRL)'
+    else:
+        return None
 
-    if info.budget is None:
-        return 'Qual é o orçamento máximo que você tem em mente, em reais?'
-
-    return None
+    llm = get_llm()
+    ai_message = await llm.ainvoke(
+        [SystemMessage(ASK_REQUIREMENTS_PROMPT.format(missing=missing)), *messages]
+    )
+    return ai_message.text.strip()
 
 
 async def collect_requirements_node(state: ProductSearchState):
     info = await _extract_info(list(state['messages']))
-    question = _next_question(info)
+    question = await _next_question(info, list(state['messages']))
 
     new_messages: list = []
+
     if question is not None:
-        answer = interrupt({'type': 'collect', 'question': question})
+        answer = interrupt({'type': 'collect', 'message': '', 'question': question})
         human = HumanMessage(str(answer))
         new_messages.append(human)
         # Re-extrai já considerando a resposta recém-dada.

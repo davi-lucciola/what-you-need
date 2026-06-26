@@ -8,6 +8,22 @@ quando a informação não estiver presente. Não invente dados. Responda em por
 """
 
 
+ASK_REQUIREMENTS_PROMPT = """
+Você é um consultor de compras conversando com o usuário em português do Brasil.
+
+Com base no histórico da conversa, ainda falta coletar a seguinte informação para ajudá-lo a
+encontrar o melhor produto: {missing}
+
+Gere UMA pergunta curta, natural e amigável apenas sobre o que falta.
+
+Regras:
+- Considere o que o usuário já disse e NÃO repita perguntas que ele já respondeu.
+- Referencie o contexto (produto ou uso já mencionados) quando fizer sentido, para soar natural.
+- Não invente dados nem faça suposições.
+- Responda SOMENTE com a pergunta, sem saudações nem texto extra.
+"""
+
+
 FIND_PRODUCTS_PROMPT = """
 Você é um especialista em produtos e custo-benefício. A partir dos resultados de busca
 fornecidos, identifique os 3 modelos de produto mais adequados para a necessidade e o

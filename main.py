@@ -10,12 +10,21 @@ from rich import print
 from app.agents import build_agent
 
 
-def _render(result: dict) -> None:
-    """Mostra a última mensagem do agente, se houver."""
+def _render(result: dict, last_id: str | None) -> str | None:
+    """Mostra a última mensagem do agente, se ainda não foi exibida.
+
+    O checkpointer devolve o histórico acumulado a cada turno; renderizar só a
+    última AIMessage (deduplicada por id) evita reimprimir mensagens anteriores.
+    """
     messages = result.get('messages') or []
-    for message in messages:
-        if isinstance(message, AIMessage) and message.content:
-            print(f'[bold green]Assistente:[/bold green] {message.content}')
+    last_ai = next(
+        (m for m in reversed(messages) if isinstance(m, AIMessage) and m.content),
+        None,
+    )
+    if last_ai is None or last_ai.id == last_id:
+        return last_id
+    print(f'[bold green]Assistente:[/bold green] {last_ai.content}')
+    return last_ai.id
 
 
 def _pending_interrupt(result: dict):
@@ -37,6 +46,7 @@ async def main():
     )
 
     result = {}
+    last_rendered_id: str | None = None
 
     while True:
         interrupt_payload = _pending_interrupt(result)
@@ -59,6 +69,7 @@ async def main():
                 break
 
             result = await agent.ainvoke(Command(resume=answer), config)
+            last_rendered_id = _render(result, last_rendered_id)
             continue
 
         # Sem interrupt: turno concluído, aguarda nova mensagem do usuário.
@@ -71,7 +82,7 @@ async def main():
             {'messages': [HumanMessage(user_input)], 'next': ''}, config
         )
 
-        _render(result)
+        last_rendered_id = _render(result, last_rendered_id)
 
     print(await agent.aget_state(config=config))
 
