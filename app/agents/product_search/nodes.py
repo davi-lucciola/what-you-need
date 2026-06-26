@@ -1,6 +1,7 @@
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.types import interrupt
 
+from app.agents.product_search.constants import Nodes
 from app.agents.product_search.prompt import EXTRACT_REQUIREMENTS_PROMPT
 from app.agents.product_search.schemas import (
     CollectedInfo,
@@ -15,13 +16,6 @@ from app.agents.product_search.tools import (
 )
 from app.llm import get_llm
 
-
-# Nomes dos nós do sub-grafo (também aparecem assim no LangGraph Studio).
-NODE_COLLECT = 'collect_requirements'
-NODE_SEARCH = 'search_products'
-NODE_VALIDATE = 'validate_products'
-NODE_PRESENT = 'present_recommendations'
-NODE_LINKS = 'search_purchase_links'
 
 # Limite de re-buscas no loop de validação para não cair em loop infinito.
 MAX_SEARCH_ATTEMPTS = 2
@@ -60,8 +54,10 @@ def _next_question(info: CollectedInfo) -> str | None:
             'e para que vai usar? Tem alguma característica mais importante (ex.: câmera, '
             'bateria, desempenho)?'
         )
+
     if info.budget is None:
         return 'Qual é o orçamento máximo que você tem em mente, em reais?'
+
     return None
 
 
@@ -91,8 +87,8 @@ def route_after_collect(state: ProductSearchState):
         and requirements.is_complete
         and state.get('budget') is not None
     ):
-        return NODE_SEARCH
-    return NODE_COLLECT
+        return Nodes.SEARCH
+    return Nodes.COLLECT
 
 
 # --------------------------------------------------------------------------- #
@@ -132,8 +128,8 @@ def route_after_validate(state: ProductSearchState):
     products = state.get('products', [])
     attempts = state.get('search_attempts', 0)
     if len(products) >= TOP_PRODUCTS or attempts >= MAX_SEARCH_ATTEMPTS:
-        return NODE_PRESENT
-    return NODE_SEARCH
+        return Nodes.PRESENT
+    return Nodes.SEARCH
 
 
 # --------------------------------------------------------------------------- #

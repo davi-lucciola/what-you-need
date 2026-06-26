@@ -36,15 +36,11 @@ async def main():
         '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
     )
 
-    user_input = input('Você: ')
-    result = await agent.ainvoke(
-        {'messages': [HumanMessage(user_input)], 'next': ''}, config
-    )
-
-    _render(result)
+    result = {}
 
     while True:
         interrupt_payload = _pending_interrupt(result)
+
         if interrupt_payload is not None:
             # O nó pausou esperando input (coleta de requisitos ou escolha do produto).
             if isinstance(interrupt_payload, dict):
@@ -56,9 +52,12 @@ async def main():
                 print(
                     f'[bold yellow]{interrupt_payload.get("question", "")}[/bold yellow]'
                 )
+
             answer = input('Você: ')
+
             if answer.strip().lower() == 'sair':
                 break
+
             result = await agent.ainvoke(Command(resume=answer), config)
             continue
 
@@ -73,6 +72,8 @@ async def main():
         )
 
         _render(result)
+
+    print(await agent.aget_state(config=config))
 
 
 if __name__ == '__main__':

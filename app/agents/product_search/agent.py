@@ -1,11 +1,7 @@
 from langgraph.graph import END, START, StateGraph
 
+from app.agents.product_search.constants import Nodes
 from app.agents.product_search.nodes import (
-    NODE_COLLECT,
-    NODE_LINKS,
-    NODE_PRESENT,
-    NODE_SEARCH,
-    NODE_VALIDATE,
     collect_requirements_node,
     present_recommendations_node,
     route_after_collect,
@@ -26,21 +22,21 @@ def build_product_search_agent():
     """
     builder = StateGraph(ProductSearchState)
 
-    builder.add_node(NODE_COLLECT, collect_requirements_node)
-    builder.add_node(NODE_SEARCH, search_products_node)
-    builder.add_node(NODE_VALIDATE, validate_products_node)
-    builder.add_node(NODE_PRESENT, present_recommendations_node)
-    builder.add_node(NODE_LINKS, search_purchase_links_node)
+    builder.add_node(Nodes.COLLECT, collect_requirements_node)
+    builder.add_node(Nodes.SEARCH, search_products_node)
+    builder.add_node(Nodes.VALIDATE, validate_products_node)
+    builder.add_node(Nodes.PRESENT, present_recommendations_node)
+    builder.add_node(Nodes.LINKS, search_purchase_links_node)
 
-    builder.add_edge(START, NODE_COLLECT)
+    builder.add_edge(START, Nodes.COLLECT)
     builder.add_conditional_edges(
-        NODE_COLLECT, route_after_collect, [NODE_COLLECT, NODE_SEARCH]
+        Nodes.COLLECT, route_after_collect, [Nodes.COLLECT, Nodes.SEARCH]
     )
-    builder.add_edge(NODE_SEARCH, NODE_VALIDATE)
+    builder.add_edge(Nodes.SEARCH, Nodes.VALIDATE)
     builder.add_conditional_edges(
-        NODE_VALIDATE, route_after_validate, [NODE_SEARCH, NODE_PRESENT]
+        Nodes.VALIDATE, route_after_validate, [Nodes.SEARCH, Nodes.PRESENT]
     )
-    builder.add_edge(NODE_PRESENT, NODE_LINKS)
-    builder.add_edge(NODE_LINKS, END)
+    builder.add_edge(Nodes.PRESENT, Nodes.LINKS)
+    builder.add_edge(Nodes.LINKS, END)
 
     return builder.compile()
