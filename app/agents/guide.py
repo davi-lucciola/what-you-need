@@ -43,7 +43,8 @@ Mantenha as respostas concisas, cordiais e fáceis de entender.
 async def guide_agent(state: ChatState):
     llm = get_llm()
 
-    messages = [SystemMessage(GUIDE_SYSTEM_PROMPT), *state['messages']]
+    system_message = SystemMessage(GUIDE_SYSTEM_PROMPT)
+    messages = [system_message, *state['messages']]
     ai_message = await llm.ainvoke(messages)
 
     return {'messages': [ai_message]}

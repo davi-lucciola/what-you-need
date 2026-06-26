@@ -1,4 +1,4 @@
-from langchain_core.messages import BaseMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 
 from app.agents.constants import AGENTS_DESCRIPTION, AllowedAgents
 from app.agents.states import ChatState
@@ -24,10 +24,8 @@ class Router(BaseModel):
 async def supervisor_agent(state: ChatState):
     llm = get_llm().with_structured_output(Router)
 
-    messages: list[BaseMessage] = [
-        SystemMessage(SUPERVISOR_SYSTEM_PROMPT),
-        *state['messages'],
-    ]
+    system_message = SystemMessage(SUPERVISOR_SYSTEM_PROMPT)
+    messages = [system_message, *state['messages']]
     router = await llm.ainvoke(messages)
 
     assert isinstance(router, Router)
