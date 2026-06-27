@@ -26,6 +26,10 @@ class ProductDict(TypedDict):
 class ProductSearchState(AgentState):
     requirements: RequirementsDict | None
     budget: float | None
+    # Pergunta já gerada e exibida ao usuário, aguardando resposta. Persistida
+    # antes do interrupt() para garantir fidelidade: como o nó re-executa do topo
+    # no resume, relemos o texto exato exibido em vez de recalculá-lo via LLM.
+    pending_question: str | None
     products: list[ProductDict]
     chosen_product: ProductDict | None
     search_attempts: int

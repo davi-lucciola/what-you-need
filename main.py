@@ -69,7 +69,8 @@ async def main():
                 break
 
             result = await agent.ainvoke(Command(resume=answer), config)
-            last_rendered_id = _render(result, last_rendered_id)
+            if _pending_interrupt(result) is None:
+                last_rendered_id = _render(result, last_rendered_id)
             continue
 
         # Sem interrupt: turno concluído, aguarda nova mensagem do usuário.
@@ -82,7 +83,8 @@ async def main():
             {'messages': [HumanMessage(user_input)], 'next': ''}, config
         )
 
-        last_rendered_id = _render(result, last_rendered_id)
+        if _pending_interrupt(result) is None:
+            last_rendered_id = _render(result, last_rendered_id)
 
     print(await agent.aget_state(config=config))
 

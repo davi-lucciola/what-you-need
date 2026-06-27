@@ -69,33 +69,51 @@ async def _next_question(info: CollectedInfo, messages: list) -> str | None:
 
 
 async def collect_requirements_node(state: ProductSearchState):
+    # Passe "coletar": já exibimos a pergunta no passe anterior; agora pausamos
+    # para receber a resposta. A pergunta vem do estado (texto exato exibido),
+    # não é recalculada — o nó re-executa do topo no resume do interrupt().
+    pending = state.get('pending_question')
+
+    if pending is not None:
+        answer = interrupt({'type': 'collect', 'message': '', 'question': pending})
+        human = HumanMessage(str(answer))
+        info = await _extract_info([*state['messages'], human])
+        return {
+            'messages': [human],
+            'requirements': info.to_requirements().model_dump(mode='json'),
+            'budget': info.budget,
+            'pending_question': None,
+        }
+
+    # Passe "perguntar": extrai o que já temos e decide a próxima pergunta.
     info = await _extract_info(list(state['messages']))
     question = await _next_question(info, list(state['messages']))
 
-    new_messages: list = []
-
-    if question is not None:
-        answer = interrupt({'type': 'collect', 'message': '', 'question': question})
-        human = HumanMessage(str(answer))
-        new_messages.append(human)
-        # Re-extrai já considerando a resposta recém-dada.
-        info = await _extract_info([*state['messages'], human])
-
-    return {
-        'messages': new_messages,
+    result = {
         'requirements': info.to_requirements().model_dump(mode='json'),
         'budget': info.budget,
+        'pending_question': question,
     }
+    if question is not None:
+        # Commita a AIMessage agora (antes do interrupt) e volta ao COLLECT para
+        # o passe de coleta interromper lendo a pergunta já persistida.
+        result['messages'] = [AIMessage(question)]
+    return result
 
 
 def route_after_collect(state: ProductSearchState):
+    if state.get('pending_question') is not None:
+        return Nodes.COLLECT
+
     requirements = _requirements_from_state(state)
+
     if (
         requirements is not None
         and requirements.is_complete
         and state.get('budget') is not None
     ):
         return Nodes.SEARCH
+
     return Nodes.COLLECT
 
 
@@ -185,18 +203,20 @@ async def _resolve_choice(answer: str, products: list[Product]) -> Product:
 async def present_recommendations_node(state: ProductSearchState):
     products = _products_from_state(state)
     presentation = _format_recommendations(products)
+    question = 'Qual modelo te interessou? (responda o número ou o nome)'
 
     answer = interrupt(
-        {
-            'type': 'choice',
-            'message': presentation,
-            'question': 'Qual modelo te interessou? (responda o número ou o nome)',
-        }
+        {'type': 'choice', 'message': presentation, 'question': question}
     )
     chosen = await _resolve_choice(str(answer), products)
 
+    # Persiste o turno completo exibido (apresentação + pergunta) para o histórico
+    # refletir o que o usuário viu — main.py mostra os dois campos do interrupt.
     return {
-        'messages': [AIMessage(presentation), HumanMessage(str(answer))],
+        'messages': [
+            AIMessage(f'{presentation}\n\n{question}'),
+            HumanMessage(str(answer)),
+        ],
         'chosen_product': chosen.model_dump(mode='json'),
     }
 
