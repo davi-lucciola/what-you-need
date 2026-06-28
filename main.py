@@ -17,20 +17,20 @@ def _render(result: dict[str, Any], last_id: str | None) -> str | None:
     O checkpointer devolve o histórico acumulado a cada turno; renderizar só a
     última AIMessage (deduplicada por id) evita reimprimir mensagens anteriores.
     """
-    messages = result.get("messages", [])
+    messages = result.get('messages', [])
     last_ai = next(
         (m for m in reversed(messages) if isinstance(m, AIMessage) and m.content),
         None,
     )
     if last_ai is None or last_ai.id == last_id:
         return last_id
-    print(f"[bold green]Assistente:[/bold green] {last_ai.content}")
+    print(f'[bold green]Assistente:[/bold green] {last_ai.content}')
     return last_ai.id
 
 
 def _pending_interrupt(result: dict[str, Any]) -> Any:
     """Retorna o payload do interrupt pendente, ou None."""
-    interrupts = result.get("__interrupt__")
+    interrupts = result.get('__interrupt__')
 
     if interrupts:
         return interrupts[0].value
@@ -42,7 +42,7 @@ async def main():
     # MemorySaver é em memória; para persistência real, troque por um saver
     # Sqlite/Postgres — build_agent aceita qualquer BaseCheckpointSaver.
     agent = build_agent(MemorySaver())
-    config: RunnableConfig = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    config: RunnableConfig = {'configurable': {'thread_id': str(uuid.uuid4())}}
 
     print(
         '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
@@ -58,14 +58,14 @@ async def main():
             # O nó pausou esperando input (coleta de requisitos ou escolha do produto).
             if isinstance(interrupt_payload, dict):
                 payload = cast(dict[str, Any], interrupt_payload)
-                if payload.get("message"):
-                    print(f"[bold green]Assistente:[/bold green] {payload['message']}")
-                question = payload.get("question", "")
-                print(f"[bold yellow]{question}[/bold yellow]")
+                if payload.get('message'):
+                    print(f'[bold green]Assistente:[/bold green] {payload["message"]}')
+                question = payload.get('question', '')
+                print(f'[bold yellow]{question}[/bold yellow]')
 
-            answer = input("Você: ")
+            answer = input('Você: ')
 
-            if answer.strip().lower() == "sair":
+            if answer.strip().lower() == 'sair':
                 break
 
             result = await agent.ainvoke(Command(resume=answer), config)
@@ -74,13 +74,13 @@ async def main():
             continue
 
         # Sem interrupt: turno concluído, aguarda nova mensagem do usuário.
-        user_input = input("Você: ")
+        user_input = input('Você: ')
 
-        if user_input.strip().lower() == "sair":
+        if user_input.strip().lower() == 'sair':
             break
 
         result = await agent.ainvoke(
-            {"messages": [HumanMessage(user_input)], "next": ""}, config
+            {'messages': [HumanMessage(user_input)], 'next': ''}, config
         )
 
         if _pending_interrupt(result) is None:
@@ -89,5 +89,5 @@ async def main():
     print(await agent.aget_state(config=config))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     asyncio.run(main())

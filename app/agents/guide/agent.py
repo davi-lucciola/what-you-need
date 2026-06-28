@@ -9,7 +9,7 @@ async def build_guide_agent(state: ChatState) -> ChatState:
     llm = get_llm()
 
     system_message = SystemMessage(GUIDE_SYSTEM_PROMPT)
-    messages = [system_message, *state["messages"]]
+    messages = [system_message, *state['messages']]
     ai_message = await llm.ainvoke(messages)
 
-    return {"messages": [ai_message]}
+    return {'messages': [ai_message]}

@@ -39,12 +39,12 @@ def _format_results(results: list[TavilyResult]) -> str:
     blocks: list[str] = []
     for result in results:
         blocks.append(
-            f"- Título: {result['title']}\n"
-            f"  URL: {result['url']}\n"
-            f"  Relevância: {result['score']}\n"
-            f"  Conteúdo: {result['content']}"
+            f'- Título: {result["title"]}\n'
+            f'  URL: {result["url"]}\n'
+            f'  Relevância: {result["score"]}\n'
+            f'  Conteúdo: {result["content"]}'
         )
-    return "\n".join(blocks)
+    return '\n'.join(blocks)
 
 
 def _dedupe_results(results: list[TavilyResult]) -> list[TavilyResult]:
@@ -52,7 +52,7 @@ def _dedupe_results(results: list[TavilyResult]) -> list[TavilyResult]:
     seen: set[str] = set()
     unique: list[TavilyResult] = []
     for result in results:
-        url = result.get("url", "")
+        url = result.get('url', '')
         if url and url not in seen:
             seen.add(url)
             unique.append(result)
@@ -67,20 +67,20 @@ def _build_search_queries(
     Diferentes ângulos (custo-benefício, reviews/comparativos, prioridades) aumentam a
     chance de cobrir os melhores modelos do que uma única query fixa.
     """
-    product = requirements.product_type or "produto"
-    budget_clause = f" até R${budget:.0f}" if budget else ""
-    priorities = " ".join(requirements.priorities)
-    use_case = requirements.use_case or ""
+    product = requirements.product_type or 'produto'
+    budget_clause = f' até R${budget:.0f}' if budget else ''
+    priorities = ' '.join(requirements.priorities)
+    use_case = requirements.use_case or ''
 
     queries = [
-        f"melhores {product} custo-benefício{budget_clause} 2026",
-        f"{product} {use_case} {priorities} review comparativo 2026".strip(),
+        f'melhores {product} custo-benefício{budget_clause} 2026',
+        f'{product} {use_case} {priorities} review comparativo 2026'.strip(),
     ]
     if priorities:
-        queries.append(f"melhor {product} para {priorities}{budget_clause}")
+        queries.append(f'melhor {product} para {priorities}{budget_clause}')
     if requirements.must_haves:
         queries.append(
-            f"{product} com {' '.join(requirements.must_haves)}{budget_clause}"
+            f'{product} com {" ".join(requirements.must_haves)}{budget_clause}'
         )
     if refine_hint:
         queries.append(refine_hint)
@@ -106,35 +106,35 @@ async def search_candidates(
     for query in queries:
         response = cast(
             TavilySearchResponse,
-            await client.search(query, search_depth="advanced", country="brazil"),
+            await client.search(query, search_depth='advanced', country='brazil'),
         )
-        aggregated.extend(response.get("results", []))
+        aggregated.extend(response.get('results', []))
 
     results = _dedupe_results(aggregated)[:_MAX_AGGREGATED_RESULTS]
     context = _format_results(results)
 
     llm = (
         get_llm()
-        .with_structured_output(ProductRecommendations, method="function_calling")
+        .with_structured_output(ProductRecommendations, method='function_calling')
         .with_retry(
             retry_if_exception_type=_STRUCTURED_RETRY_ERRORS, stop_after_attempt=3
         )
     )
-    priorities = ", ".join(requirements.priorities) or "não informadas"
-    brands = ", ".join(requirements.brand_preferences) or "indiferente"
-    must_haves = ", ".join(requirements.must_haves) or "nenhum"
-    budget_text = f"R${budget}" if budget else "não informado"
+    priorities = ', '.join(requirements.priorities) or 'não informadas'
+    brands = ', '.join(requirements.brand_preferences) or 'indiferente'
+    must_haves = ', '.join(requirements.must_haves) or 'nenhum'
+    budget_text = f'R${budget}' if budget else 'não informado'
     recommendations = await llm.ainvoke(
         [
             SystemMessage(FIND_PRODUCTS_PROMPT),
             HumanMessage(
-                f"Tipo de produto: {requirements.product_type}\n"
-                f"Uso pretendido: {requirements.use_case}\n"
-                f"Prioridades: {priorities}\n"
-                f"Marcas preferidas: {brands}\n"
-                f"Requisitos obrigatórios: {must_haves}\n"
-                f"Orçamento máximo: {budget_text}\n\n"
-                f"Resultados de busca:\n{context}"
+                f'Tipo de produto: {requirements.product_type}\n'
+                f'Uso pretendido: {requirements.use_case}\n'
+                f'Prioridades: {priorities}\n'
+                f'Marcas preferidas: {brands}\n'
+                f'Requisitos obrigatórios: {must_haves}\n'
+                f'Orçamento máximo: {budget_text}\n\n'
+                f'Resultados de busca:\n{context}'
             ),
         ]
     )
@@ -156,27 +156,27 @@ async def deep_search_purchase_links(
     response = cast(
         TavilySearchResponse,
         await client.search(
-            f"comprar {product.name} preço Amazon Mercado Livre Shopee",
-            search_depth="advanced",
-            country="brazil",
+            f'comprar {product.name} preço Amazon Mercado Livre Shopee',
+            search_depth='advanced',
+            country='brazil',
         ),
     )
 
-    results = response.get("results", [])
+    results = response.get('results', [])
     context = _format_results(results)
 
     # Lê as páginas das lojas mais relevantes para confirmar link e preço reais.
-    top_urls = [r["url"] for r in results[:quantity] if r.get("url")]
+    top_urls = [r['url'] for r in results[:quantity] if r.get('url')]
 
     if top_urls:
         try:
             extracted = cast(TavilyExtractResponse, await client.extract(top_urls))
-            for item in extracted.get("results", []):
-                raw = item.get("raw_content") or ""
+            for item in extracted.get('results', []):
+                raw = item.get('raw_content') or ''
                 if raw:
                     context += (
-                        f"\n\n[Conteúdo extraído de {item.get('url', '')}]:\n"
-                        f"{raw[:2000]}"
+                        f'\n\n[Conteúdo extraído de {item.get("url", "")}]:\n'
+                        f'{raw[:2000]}'
                     )
         except Exception:
             # Se o extract falhar, seguimos apenas com os snippets da busca.
@@ -186,13 +186,13 @@ async def deep_search_purchase_links(
 
     system_message = FIND_PURCHASE_LINKS_PROMPT.format(quantity=quantity)
     human_message = HumanMessage(
-        f"Produto: {product.name}"
-        f"{f' ({product.brand})' if product.brand else ''}\n\n"
-        f"Resultados de busca:\n{context}"
+        f'Produto: {product.name}'
+        f'{f" ({product.brand})" if product.brand else ""}\n\n'
+        f'Resultados de busca:\n{context}'
     )
     llm = (
         get_llm()
-        .with_structured_output(PurchaseLinks, method="function_calling")
+        .with_structured_output(PurchaseLinks, method='function_calling')
         .with_retry(
             retry_if_exception_type=_STRUCTURED_RETRY_ERRORS, stop_after_attempt=3
         )

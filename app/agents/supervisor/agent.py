@@ -10,8 +10,8 @@ async def build_supervisor_agent(state: ChatState) -> ChatState:
     llm = get_llm().with_structured_output(Router)
 
     system_message = SystemMessage(SUPERVISOR_SYSTEM_PROMPT)
-    messages = [system_message, *state["messages"]]
+    messages = [system_message, *state['messages']]
     router = await llm.ainvoke(messages)
 
     assert isinstance(router, Router)
-    return {"messages": [], "next": router.next.value}
+    return {'messages': [], 'next': router.next.value}

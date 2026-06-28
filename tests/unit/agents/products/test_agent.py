@@ -10,5 +10,5 @@ def test_compiles_subgraph_with_all_nodes() -> None:
     for node in Nodes:
         assert node.value in node_names
 
-    assert "__start__" in node_names
-    assert "__end__" in node_names
+    assert '__start__' in node_names
+    assert '__end__' in node_names

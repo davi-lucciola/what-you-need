@@ -23,7 +23,7 @@ dev = [
     "pytest-anyio>=0.0.0",
     "pytest-mock>=3.14",
     "ruff>=0.11.11",
-    "ty>=0.0.55",
+    "pyright>=1.1.390",
 ]
 
 [tool.pytest.ini_options]
@@ -37,29 +37,36 @@ extend-exclude = ["migrations"]
 
 [tool.ruff.lint]
 select = ["I", "F", "E", "W", "PL", "PT"]
-ignore = [
-    "T201",   # Checks for print statements, 
-    "COM812", # Checks for the absence of trailing commas.
-    "INP001", # Checks for packages that are missing an __init__.py file.
-    "D",      # All pydocstyle (D)
-    "ANN401", # Checks that function arguments are annotated with a more specific type than Any.
-    "ERA001", # Checks for commented-out Python code.
-    "A004",   # Shadowing Python Builtin
-]
+ignore = []
 
-[tool.ty.rules]
-missing-type-argument = "error"
-possibly-unresolved-reference = "warn"
+[tool.ruff.format]
+quote-style = "single"
 
 [tool.pyright]
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
+include = ["app", "tests"]
+exclude = [
+    "**/venv",
+    "**/.venv",
+    "**/env",
+    "**/.env",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+]
+venv = ".venv"
+venvPath = "."
 reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
 
 
 [tool.taskipy.tasks]
 main = "uv run --env-file=.env main.py"
-lint = "ty check && ruff check"
+lint = "pyright && ruff check"
 format = "ruff format"
+pre_format = "task lint"
 test = "pytest -s -x --cov=app tests/unit -vv"
 post_test = "coverage html --dir=.htmlcov"
 langsmith = "uv run --env-file=.env langgraph dev --config ./langgraph.json"

@@ -19,11 +19,11 @@ def patch_structured_llm(
     """
     structured_llm = mocker.AsyncMock()
     ainvoke = mocker.patch.object(
-        structured_llm, "ainvoke", return_value=structured_return
+        structured_llm, 'ainvoke', return_value=structured_return
     )
     llm = mocker.AsyncMock(BaseChatModel)
     with_structured_output = mocker.patch.object(
-        llm, "with_structured_output", return_value=structured_llm
+        llm, 'with_structured_output', return_value=structured_llm
     )
-    mocker.patch.object(module, "get_llm", return_value=llm)
+    mocker.patch.object(module, 'get_llm', return_value=llm)
     return llm, ainvoke, with_structured_output

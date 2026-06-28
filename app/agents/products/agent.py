@@ -20,7 +20,7 @@ def build_product_search_agent():
     sub-grafo e o checkpointer do grafo pai propaga, permitindo que os interrupt()
     funcionem entre os turnos. Compilado sem checkpointer de propósito.
     """
-    builder = StateGraph(ProductSearchState)  # ty: ignore[invalid-argument-type]
+    builder = StateGraph(ProductSearchState)
 
     builder.add_node(Nodes.COLLECT, collect_requirements_node)
     builder.add_node(Nodes.SEARCH, search_products_node)

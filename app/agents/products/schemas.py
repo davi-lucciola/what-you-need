@@ -20,15 +20,15 @@ def parse_brl_price(value: object) -> Decimal | None:
         return None
 
     # Mantém apenas dígitos e separadores, removendo "R$", espaços, etc.
-    text = re.sub(r"[^\d.,]", "", text)
+    text = re.sub(r'[^\d.,]', '', text)
     if not text:
         return None
 
-    if "," in text and "." in text:
+    if ',' in text and '.' in text:
         # Formato brasileiro: ponto de milhar, vírgula decimal -> 3.950,00 -> 3950.00
-        text = text.replace(".", "").replace(",", ".")
-    elif "," in text:
-        text = text.replace(",", ".")
+        text = text.replace('.', '').replace(',', '.')
+    elif ',' in text:
+        text = text.replace(',', '.')
 
     try:
         return Decimal(text)
@@ -40,25 +40,25 @@ class Product(BaseModel):
     name: str = Field(
         description='Nome/modelo do produto, ex. "Samsung Galaxy A17 5G".'
     )
-    brand: str | None = Field(default=None, description="Marca/fabricante do produto.")
+    brand: str | None = Field(default=None, description='Marca/fabricante do produto.')
     estimated_price: Decimal | None = Field(
         default=None,
         description=(
-            "Preço aproximado em reais (BRL) como número decimal simples, sem símbolo "
-            "de moeda nem separador de milhar (ex.: 3950.00). Use null se desconhecido."
+            'Preço aproximado em reais (BRL) como número decimal simples, sem símbolo '
+            'de moeda nem separador de milhar (ex.: 3950.00). Use null se desconhecido.'
         ),
     )
     reason: str = Field(
         description=(
-            "Por que é uma boa opção para a necessidade e o orçamento informados."
+            'Por que é uma boa opção para a necessidade e o orçamento informados.'
         )
     )
     key_features: list[str] = Field(
         default_factory=list,
-        description="Principais características do produto (ex. RAM, câmera, bateria).",
+        description='Principais características do produto (ex. RAM, câmera, bateria).',
     )
 
-    @field_validator("estimated_price", mode="before")
+    @field_validator('estimated_price', mode='before')
     @classmethod
     def _coerce_estimated_price(cls, value: object) -> Decimal | None:
         return parse_brl_price(value)
@@ -67,7 +67,7 @@ class Product(BaseModel):
 class ProductRecommendations(BaseModel):
     products: list[Product] = Field(
         description=(
-            "Lista com os 3 produtos mais adequados, ordenados por custo-benefício."
+            'Lista com os 3 produtos mais adequados, ordenados por custo-benefício.'
         )
     )
 
@@ -76,12 +76,12 @@ class PurchaseLink(BaseModel):
     store: str = Field(
         description='Loja do link, ex. "Amazon", "Mercado Livre", "Shopee".'
     )
-    url: str = Field(description="URL direta para comprar o produto na loja.")
+    url: str = Field(description='URL direta para comprar o produto na loja.')
     price: float | None = Field(
-        default=None, description="Preço anunciado em reais (BRL), se disponível."
+        default=None, description='Preço anunciado em reais (BRL), se disponível.'
     )
 
-    @field_validator("price", mode="before")
+    @field_validator('price', mode='before')
     @classmethod
     def _coerce_price(cls, value: object) -> float | None:
         parsed = parse_brl_price(value)
@@ -90,7 +90,7 @@ class PurchaseLink(BaseModel):
 
 class PurchaseLinks(BaseModel):
     links: list[PurchaseLink] = Field(
-        description="Até 2 links de compra, priorizando Amazon, Mercado Livre e Shopee."
+        description='Até 2 links de compra, priorizando Amazon, Mercado Livre e Shopee.'
     )
 
 
@@ -108,13 +108,13 @@ class Requirements(BaseModel):
     priorities: list[str] = Field(
         default_factory=list,
         description=(
-            "Características mais importantes para o usuário, "
+            'Características mais importantes para o usuário, '
             'ex. ["câmera", "bateria"].'
         ),
     )
     brand_preferences: list[str] = Field(
         default_factory=list,
-        description="Marcas preferidas ou a evitar informadas pelo usuário.",
+        description='Marcas preferidas ou a evitar informadas pelo usuário.',
     )
     must_haves: list[str] = Field(
         default_factory=list,
@@ -123,7 +123,7 @@ class Requirements(BaseModel):
         ),
     )
 
-    @field_validator("priorities", "brand_preferences", "must_haves", mode="before")
+    @field_validator('priorities', 'brand_preferences', 'must_haves', mode='before')
     @classmethod
     def _coerce_none_to_empty_list(cls, value: object) -> object:
         # O LLM costuma emitir null em vez de [] quando o campo está vazio.
@@ -145,25 +145,25 @@ class CollectedInfo(BaseModel):
         default=None, description='Tipo/categoria do produto, ex. "celular".'
     )
     use_case: str | None = Field(
-        default=None, description="Para que o usuário vai usar o produto."
+        default=None, description='Para que o usuário vai usar o produto.'
     )
     priorities: list[str] = Field(
-        default_factory=list, description="Características mais importantes."
+        default_factory=list, description='Características mais importantes.'
     )
     brand_preferences: list[str] = Field(
-        default_factory=list, description="Marcas preferidas ou a evitar."
+        default_factory=list, description='Marcas preferidas ou a evitar.'
     )
     must_haves: list[str] = Field(
-        default_factory=list, description="Requisitos obrigatórios."
+        default_factory=list, description='Requisitos obrigatórios.'
     )
     budget: float | None = Field(
         default=None,
         description=(
-            "Orçamento máximo do usuário em reais (BRL), se informado. Null se não."
+            'Orçamento máximo do usuário em reais (BRL), se informado. Null se não.'
         ),
     )
 
-    @field_validator("priorities", "brand_preferences", "must_haves", mode="before")
+    @field_validator('priorities', 'brand_preferences', 'must_haves', mode='before')
     @classmethod
     def _coerce_none_to_empty_list(cls, value: object) -> object:
         return value if value is not None else []
@@ -181,7 +181,7 @@ class CollectedInfo(BaseModel):
 class ProductChoice(BaseModel):
     index: int = Field(
         description=(
-            "Número (1 a N) do produto escolhido pelo usuário. Use 1 se ele "
-            "pedir o mais recomendado ou não especificar claramente."
+            'Número (1 a N) do produto escolhido pelo usuário. Use 1 se ele '
+            'pedir o mais recomendado ou não especificar claramente.'
         )
     )

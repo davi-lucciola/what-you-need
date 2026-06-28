@@ -7,8 +7,8 @@ class Nodes(StrEnum):
     Os valores também aparecem assim no LangGraph Studio.
     """
 
-    COLLECT = "collect_requirements"
-    SEARCH = "search_products"
-    VALIDATE = "validate_products"
-    PRESENT = "present_recommendations"
-    LINKS = "search_purchase_links"
+    COLLECT = 'collect_requirements'
+    SEARCH = 'search_products'
+    VALIDATE = 'validate_products'
+    PRESENT = 'present_recommendations'
+    LINKS = 'search_purchase_links'
