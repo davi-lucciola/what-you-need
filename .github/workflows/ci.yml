@@ -23,6 +23,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    needs: lint
     env:
       AGENT_CHAT_MODEL: openai:gpt-4.1-nano
       TAVILY_API_KEY: dummy
