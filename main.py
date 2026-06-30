@@ -38,56 +38,55 @@ def _pending_interrupt(result: dict[str, Any]) -> Any:
 
 
 async def main():
-    # MemorySaver é em memória; para persistência real, troque por um saver
-    # Sqlite/Postgres — build_agent aceita qualquer BaseCheckpointSaver.
+    async with get_postgres_checkpointer() as checkpointer:
+        agent = build_agent(checkpointer=checkpointer)
+        config: RunnableConfig = {'configurable': {'thread_id': '14'}}
 
-    checkpointer = await get_postgres_checkpointer()
-    agent = build_agent(checkpointer=checkpointer)
-    config: RunnableConfig = {'configurable': {'thread_id': '14'}}
-
-    print(
-        '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
-    )
-
-    result: dict[str, Any] = {}
-    last_rendered_id: str | None = None
-
-    while True:
-        interrupt_payload = _pending_interrupt(result)
-
-        if interrupt_payload is not None:
-            # O nó pausou esperando input (coleta de requisitos ou escolha do produto).
-            if isinstance(interrupt_payload, dict):
-                payload = cast(dict[str, Any], interrupt_payload)
-                if payload.get('message'):
-                    print(f'[bold green]Assistente:[/bold green] {payload["message"]}')
-                question = payload.get('question', '')
-                print(f'[bold yellow]{question}[/bold yellow]')
-
-            answer = input('Você: ')
-
-            if answer.strip().lower() == 'sair':
-                break
-
-            result = await agent.ainvoke(Command(resume=answer), config)
-            if _pending_interrupt(result) is None:
-                last_rendered_id = _render(result, last_rendered_id)
-            continue
-
-        # Sem interrupt: turno concluído, aguarda nova mensagem do usuário.
-        user_input = input('Você: ')
-
-        if user_input.strip().lower() == 'sair':
-            break
-
-        result = await agent.ainvoke(
-            {'messages': [HumanMessage(user_input)], 'next': ''}, config
+        print(
+            '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
         )
 
-        if _pending_interrupt(result) is None:
-            last_rendered_id = _render(result, last_rendered_id)
+        result: dict[str, Any] = {}
+        last_rendered_id: str | None = None
 
-    print(await agent.aget_state(config=config))
+        while True:
+            interrupt_payload = _pending_interrupt(result)
+
+            if interrupt_payload is not None:
+                # O nó pausou esperando input (coleta de requisitos ou escolha do produto).
+                if isinstance(interrupt_payload, dict):
+                    payload = cast(dict[str, Any], interrupt_payload)
+                    if payload.get('message'):
+                        print(
+                            f'[bold green]Assistente:[/bold green] {payload["message"]}'
+                        )
+                    question = payload.get('question', '')
+                    print(f'[bold yellow]{question}[/bold yellow]')
+
+                answer = input('Você: ')
+
+                if answer.strip().lower() == 'sair':
+                    break
+
+                result = await agent.ainvoke(Command(resume=answer), config)
+                if _pending_interrupt(result) is None:
+                    last_rendered_id = _render(result, last_rendered_id)
+                continue
+
+            # Sem interrupt: turno concluído, aguarda nova mensagem do usuário.
+            user_input = input('Você: ')
+
+            if user_input.strip().lower() == 'sair':
+                break
+
+            result = await agent.ainvoke(
+                {'messages': [HumanMessage(user_input)], 'next': ''}, config
+            )
+
+            if _pending_interrupt(result) is None:
+                last_rendered_id = _render(result, last_rendered_id)
+
+        print(await agent.aget_state(config=config))
 
 
 if __name__ == '__main__':
