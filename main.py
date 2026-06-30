@@ -43,7 +43,8 @@ async def main():
         config: RunnableConfig = {'configurable': {'thread_id': '14'}}
 
         print(
-            '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
+            '[bold]Assistente de busca de '
+            'produtos[/bold] (digite "sair" para encerrar)\n'
         )
 
         result: dict[str, Any] = {}
@@ -53,7 +54,8 @@ async def main():
             interrupt_payload = _pending_interrupt(result)
 
             if interrupt_payload is not None:
-                # O nó pausou esperando input (coleta de requisitos ou escolha do produto).
+                # O nó pausou esperando input
+                # (coleta de requisito ou escolha do produto).
                 if isinstance(interrupt_payload, dict):
                     payload = cast(dict[str, Any], interrupt_payload)
                     if payload.get('message'):
