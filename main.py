@@ -1,14 +1,13 @@
 import asyncio
-import uuid
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 from rich import print
 
 from app.agents import build_agent
+from app.db import get_postgres_checkpointer
 
 
 def _render(result: dict[str, Any], last_id: str | None) -> str | None:
@@ -41,8 +40,10 @@ def _pending_interrupt(result: dict[str, Any]) -> Any:
 async def main():
     # MemorySaver é em memória; para persistência real, troque por um saver
     # Sqlite/Postgres — build_agent aceita qualquer BaseCheckpointSaver.
-    agent = build_agent(MemorySaver())
-    config: RunnableConfig = {'configurable': {'thread_id': str(uuid.uuid4())}}
+
+    checkpointer = await get_postgres_checkpointer()
+    agent = build_agent(checkpointer=checkpointer)
+    config: RunnableConfig = {'configurable': {'thread_id': '14'}}
 
     print(
         '[bold]Assistente de busca de produtos[/bold] (digite "sair" para encerrar)\n'
