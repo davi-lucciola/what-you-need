@@ -25,7 +25,7 @@ from app.agents.products.tools import (
     deep_search_purchase_links,
     search_candidates,
 )
-from app.llm import get_llm
+from app.infra.llm import get_llm
 
 # Limite de re-buscas no loop de validação para não cair em loop infinito.
 MAX_SEARCH_ATTEMPTS = 2

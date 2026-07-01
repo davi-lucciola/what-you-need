@@ -2,7 +2,7 @@ from langchain_core.messages import SystemMessage
 
 from app.agents.guide.prompt import GUIDE_SYSTEM_PROMPT
 from app.agents.states import ChatState
-from app.llm import get_llm
+from app.infra.llm import get_llm
 
 
 async def build_guide_agent(state: ChatState) -> ChatState:
