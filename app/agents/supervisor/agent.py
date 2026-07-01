@@ -3,7 +3,7 @@ from langchain_core.messages import SystemMessage
 from app.agents.states import ChatState
 from app.agents.supervisor.prompt import SUPERVISOR_SYSTEM_PROMPT
 from app.agents.supervisor.schemas import Router
-from app.llm import get_llm
+from app.infra.llm import get_llm
 
 
 async def build_supervisor_agent(state: ChatState) -> ChatState:

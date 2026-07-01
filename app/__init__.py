@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents import build_agent
 from app.api import router
-from app.db import get_postgres_checkpointer_pool
+from app.infra.db import get_postgres_checkpointer_pool
 
 
 @asynccontextmanager

@@ -15,8 +15,8 @@ from app.agents.products.schemas import (
     PurchaseLinks,
     Requirements,
 )
-from app.llm import get_llm
-from app.tavily import (
+from app.infra.llm import get_llm
+from app.infra.tavily import (
     TavilyExtractResponse,
     TavilyResult,
     TavilySearchResponse,
