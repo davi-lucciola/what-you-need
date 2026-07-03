@@ -1,18 +1,48 @@
-# web-search-tool
+# What you Need?
 
 ## 🔭 Overview
 
-A conversational agent built with **LangGraph** (in Brazilian Portuguese) that helps
-the user find the product with the **best cost-benefit** for their budget and need.
+A conversational agent built with **LangGraph** (in Brazilian Portuguese) that helps the
+user find the product with the **best cost-benefit** for their budget and need.
 
 It follows a **supervisor/router** pattern: a supervisor reads the conversation and
 dispatches the flow to specialized sub-agents. Web search is powered by **Tavily**.
 
+The agent is exposed as a **FastAPI web service** that **streams responses over SSE**
+(Server-Sent Events), and conversation state is persisted in **PostgreSQL** through a
+LangGraph checkpointer, so each thread survives across requests.
+
 ## 🏗️ Architecture
 
-The main graph is compiled in `app/agents/__init__.py` and exposed as the entrypoint
-`app.agents:make_graph` (id `grafo` in `langgraph.json`), as well as being exported to
-`main.py`.
+The project is organized in layers under `app/`:
+
+```
+app/
+  __init__.py         # create_app() FastAPI factory + lifespan (builds the Postgres
+                      #   checkpointer pool and compiles the agent onto app.state.agent)
+  main.py             # app = create_app()   (uvicorn entrypoint: app.main:app)
+  config.py           # Settings (env): AGENT_CHAT_MODEL, TAVILY_API_KEY,
+                      #   CHECKPOINTER_DATABASE_URL
+  api/                # HTTP layer (FastAPI)
+    routers/chat.py   #   POST /threads/{thread_id}/chat -> SSE stream
+    schemas/chat.py   #   ChatRequest { message }
+    deps.py           #   get_agent (reads app.state.agent)
+  core/               # domain logic
+    agents/           #   the LangGraph graph (supervisor / guide / products)
+      checkpointer.py #   AsyncPostgresSaver over an async connection pool
+    services/
+      chat.py         #   event_stream(): turns the graph run into SSE events
+  infra/              # external integrations
+    llm.py            #   get_llm()
+    tavily.py         #   get_tavily_client() + Tavily response types
+```
+
+- **Web entrypoint**: `app.main:app`, built by `create_app()` in `app/__init__.py`. The
+  FastAPI lifespan opens the Postgres checkpointer pool and compiles the agent onto
+  `app.state.agent`.
+- **Graph entrypoint**: the graph is built in `app/core/agents/__init__.py`
+  (`build_agent` / `make_graph`) and is also exposed to LangGraph Studio via
+  `langgraph.json` (graph id `grafo`).
 
 Main graph flow:
 
@@ -22,14 +52,14 @@ START → supervisor → (conditional: guide | products) → END
 
 ### Nodes and sub-agents
 
-- **Supervisor** (`app/agents/supervisor/`): an LLM with
+- **Supervisor** (`app/core/agents/supervisor/`): an LLM with
   `with_structured_output(Router)` that reads the message history and writes the chosen
   agent into `state['next']`. It **only routes** — it does not produce user-facing
   messages.
-- **Guide** (`app/agents/guide/`): the welcome/reception agent. Explains the bot and
+- **Guide** (`app/core/agents/guide/`): the welcome/reception agent. Explains the bot and
   identifies the user's intent. It does **not** collect budget/requirements or run
   searches (that is the products agent's responsibility).
-- **Products** (`app/agents/products/`): compiles a subgraph with human-in-the-loop
+- **Products** (`app/core/agents/products/`): compiles a subgraph with human-in-the-loop
   steps via `interrupt()`:
 
   ```
@@ -39,28 +69,53 @@ START → supervisor → (conditional: guide | products) → END
   - `tools.py` runs the Tavily searches.
   - `nodes.py` holds the subgraph steps and the routers.
 
-### Package convention
+### API and SSE streaming
 
-Each agent is a package under `app/agents/` with a uniform layout:
+A single endpoint drives a conversation thread:
 
-- `prompt.py` — prompts.
-- `schemas.py` — pydantic structured-output models.
-- `agent.py` — the `build_*_agent` function.
-- The **products** subgraph also has `state.py`, `tools.py` and `nodes.py`.
+```
+POST /threads/{thread_id}/chat
+Content-Type: application/json
 
-Each package's `__init__.py` exposes a `build_*_node()` that is passed to
-`builder.add_node(...)`.
+{ "message": "..." }
+```
+
+The response is an **SSE stream** (`text/event-stream`) produced by
+`event_stream` in `app/core/services/chat.py`, which runs the graph with
+`astream(stream_mode=['messages', 'updates'])` and emits these events:
+
+| Event | Meaning |
+| --- | --- |
+| `token` | Incremental live text of the assistant's reply (the supervisor node is skipped, since its structured-output routing would leak as raw JSON). |
+| `message` | The final, authoritative text of the turn (the last non-empty `AIMessage`). Clients can replace the streamed tokens with it. It also delivers replies assembled without the LLM (e.g. purchase links), which produce no stream tokens. |
+| `interrupt` | The turn paused waiting for user input (human-in-the-loop). Carries the question payload and ends the stream early. |
+| `done` | Always emitted last to signal the turn is complete. |
+
+**Human-in-the-loop resume** (`app/api/routers/chat.py`): before running, the router
+checks the thread state — if there is a pending interrupt, the incoming message is fed as
+`Command(resume=message)`; otherwise it starts a fresh turn with a `HumanMessage`.
+
+### Persistence (Postgres checkpointer)
+
+Conversation state is persisted with `AsyncPostgresSaver` over an
+`AsyncConnectionPool` (`app/core/agents/checkpointer.py`), set up in the FastAPI lifespan.
+A local Postgres is provided by `docker-compose.yml` (`postgres:17-alpine`), with schema
+bootstrap SQL under `docker/initdb/`. The connection string comes from
+`CHECKPOINTER_DATABASE_URL`.
 
 ### Shared state
 
-`ChatState` (in `app/agents/states.py`) extends LangChain's `AgentState` — so it carries
-`messages` — and adds the `next` field, with a custom `take_latest_nonempty` reducer that
-keeps the latest non-empty routing decision.
+`ChatState` (in `app/core/agents/states.py`) extends LangChain's `AgentState` — so it
+carries `messages` — and adds the `next` field, with a custom `take_latest_nonempty`
+reducer that keeps the latest non-empty routing decision.
 
 ## 🧰 Stack
 
 - **Python 3.13**
+- **FastAPI** + **Uvicorn** (web server)
+- **sse-starlette** (SSE streaming)
 - **LangGraph / LangChain**
+- **PostgreSQL** via **langgraph-checkpoint-postgres** / **psycopg** (state persistence)
 - **Tavily** (web search)
 - **pydantic-settings** (configuration via environment)
 - **uv** (package manager / runner)
@@ -82,6 +137,12 @@ keeps the latest non-empty routing decision.
    cp .env.example .env
    ```
 
+3. Start PostgreSQL (checkpointer database):
+
+   ```bash
+   docker compose up -d
+   ```
+
 ### Environment variables
 
 | Variable | Description |
@@ -90,6 +151,7 @@ keeps the latest non-empty routing decision.
 | `OPENAI_API_KEY` | OpenAI key (if using an `openai:` model). |
 | `GOOGLE_API_KEY` | Google key (if using a `google_genai:` model). |
 | `TAVILY_API_KEY` | Tavily API key for web search. |
+| `CHECKPOINTER_DATABASE_URL` | PostgreSQL URL for the LangGraph checkpointer (e.g. `postgresql://postgres:postgres@localhost:5432/checkpointer`). |
 | `LANGSMITH_TRACING` | Enables LangSmith tracing (`true`/`false`). |
 | `LANGSMITH_ENDPOINT` | LangSmith endpoint (e.g. `https://api.smith.langchain.com`). |
 | `LANGSMITH_API_KEY` | LangSmith API key. |
@@ -100,10 +162,19 @@ keeps the latest non-empty routing decision.
 Tasks live under `[tool.taskipy.tasks]` in `pyproject.toml` and run via `uv`:
 
 ```bash
-uv run task main      # Run the agent once via main.py (one-shot ainvoke)
+uv run task dev       # Run the API with hot reload (uvicorn app.main:app --reload)
+uv run task start     # Run the API (uvicorn on 0.0.0.0:8000)
 uv run task lint      # Type-check + lint (pyright && ruff check)
 uv run task format    # Format the code (ruff format)
 uv run task test      # Run the tests with coverage (pytest --cov)
+```
+
+Once the server is up, talk to a thread over SSE:
+
+```bash
+curl -N -X POST http://localhost:8000/threads/my-thread/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message": "Preciso de um notebook até 4 mil reais"}'
 ```
 
 ## 🧪 LangGraph Studio + LangSmith
@@ -156,7 +227,7 @@ removed. Reducer state — `Annotated[list[AnyMessage], add_messages]` and the c
 ### A real error strict mode caught
 
 Strict mode is not only stub noise. Enabling it surfaced
-`reportTypedDictNotRequiredAccess` in `app/agents/__init__.py`: `next` is declared
+`reportTypedDictNotRequiredAccess` in `app/core/agents/__init__.py`: `next` is declared
 `NotRequired[NextNode]` on `ChatState`, so subscripting `state["next"]` can raise at
 runtime if the key is absent. The supervisor always writes `next` before the conditional
 edge runs, so the fix uses `state.get("next", "")` — type-safe and behavior-preserving
