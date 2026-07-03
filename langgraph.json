@@ -1,7 +1,7 @@
 {
   "$schema": "https://langgra.ph/schema.json",
   "graphs": {
-    "grafo": "app.agents:make_graph"
+    "grafo": "app.core.agents:make_graph"
   },
   "env": ".env",
   "python_version": "3.13",
