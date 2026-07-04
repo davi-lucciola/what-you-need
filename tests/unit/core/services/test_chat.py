@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 from typing import Any, AsyncIterator
 
@@ -9,7 +8,6 @@ from pytest_mock import MockerFixture
 from app.core.agents.constants import Nodes
 from app.core.services.chat import (
     _final_message,  # pyright: ignore[reportPrivateUsage]
-    _interrupt_value,  # pyright: ignore[reportPrivateUsage]
     event_stream,
 )
 
@@ -29,19 +27,14 @@ def make_agent(
     *,
     stream_items: list[Any] | None = None,
     state_messages: list[Any] | None = None,
-    interrupts: list[Any] | None = None,
 ) -> Any:
     """Monta um agente compilado mockado.
 
-    - `agent.astream(...)` é chamado (não awaited) e iterado com `async for`, então
-      retorna um async iterator via `_aiter`.
-    - `agent.aget_state(...)` é awaited e retorna um snapshot com `.values` e
-      `.interrupts`.
+    - `agent.astream(...)` é iterado com `async for` (stream_mode='messages'), então
+      cada item é uma tupla `(chunk, metadata)`.
+    - `agent.aget_state(...)` é awaited e retorna um snapshot com `.values`.
     """
-    snapshot = SimpleNamespace(
-        values={'messages': state_messages or []},
-        interrupts=interrupts,
-    )
+    snapshot = SimpleNamespace(values={'messages': state_messages or []})
     agent = mocker.Mock()
     agent.astream = mocker.Mock(return_value=_aiter(stream_items or []))
     agent.aget_state = mocker.AsyncMock(return_value=snapshot)
@@ -49,30 +42,8 @@ def make_agent(
 
 
 def messages_chunk(text: str, node: str = Nodes.GUIDE) -> Any:
-    """Item de stream no modo `'messages'`: `(mode, (chunk, metadata))`."""
-    return 'messages', (AIMessageChunk(content=text), {'langgraph_node': node})
-
-
-def interrupt_update(value: Any) -> Any:
-    """Item de stream no modo `'updates'` carregando um interrupt."""
-    return 'updates', {'__interrupt__': [SimpleNamespace(value=value)]}
-
-
-# --------------------------------------------------------------------------- #
-# _interrupt_value (função pura, síncrona)
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize(
-    ('mode', 'payload', 'expected'),
-    [
-        ('updates', {'__interrupt__': [SimpleNamespace(value={'q': 'x'})]}, {'q': 'x'}),
-        ('updates', {'__interrupt__': []}, None),
-        ('updates', {'other': 1}, None),
-        ('messages', {'__interrupt__': [SimpleNamespace(value='x')]}, None),
-        ('updates', ('not', 'a', 'dict'), None),
-    ],
-)
-def test_interrupt_value(mode: str, payload: Any, expected: Any) -> None:
-    assert _interrupt_value(mode, payload) == expected
+    """Item de stream no modo `'messages'`: `(chunk, metadata)`."""
+    return AIMessageChunk(content=text), {'langgraph_node': node}
 
 
 # --------------------------------------------------------------------------- #
@@ -168,27 +139,6 @@ async def test_event_stream_skips_empty_chunks(mocker: MockerFixture) -> None:
     events = await _collect(agent)
 
     assert all(event['event'] != 'token' for event in events)
-
-
-@pytest.mark.anyio
-async def test_event_stream_interrupt_ends_early(mocker: MockerFixture) -> None:
-    question = {'type': 'collect', 'question': 'Qual seu orçamento?'}
-    agent = make_agent(
-        mocker,
-        stream_items=[
-            interrupt_update(question),
-            messages_chunk('não deveria ser lido'),
-        ],
-        state_messages=[AIMessage('não deveria virar message')],
-    )
-
-    events = await _collect(agent)
-
-    assert [event['event'] for event in events] == ['interrupt', 'done']
-    assert json.loads(events[0]['data']) == question
-    assert events[1] == {'event': 'done', 'data': ''}
-    # Interrupt encerra o turno sem buscar a mensagem final autoritativa.
-    agent.aget_state.assert_not_awaited()
 
 
 @pytest.mark.anyio

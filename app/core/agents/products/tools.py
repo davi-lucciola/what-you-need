@@ -1,3 +1,4 @@
+import asyncio
 from typing import cast
 
 from langchain_core.exceptions import OutputParserException
@@ -17,7 +18,6 @@ from app.core.agents.products.schemas import (
 )
 from app.infra.llm import get_llm
 from app.infra.tavily import (
-    TavilyExtractResponse,
     TavilyResult,
     TavilySearchResponse,
     get_tavily_client,
@@ -32,10 +32,7 @@ _MAX_AGGREGATED_RESULTS = 12
 
 
 def _format_results(results: list[TavilyResult]) -> str:
-    """Monta um contexto textual a partir dos resultados do Tavily.
-
-    Usado para extração via LLM.
-    """
+    """Monta um contexto textual a partir dos resultados do Tavily (para o LLM)."""
     blocks: list[str] = []
     for result in results:
         blocks.append(
@@ -59,58 +56,27 @@ def _dedupe_results(results: list[TavilyResult]) -> list[TavilyResult]:
     return unique
 
 
-def _build_search_queries(
-    requirements: Requirements, budget: float | None, refine_hint: str | None = None
-) -> list[str]:
-    """Gera múltiplas queries direcionadas a partir dos requisitos do usuário.
-
-    Diferentes ângulos (custo-benefício, reviews/comparativos, prioridades) aumentam a
-    chance de cobrir os melhores modelos do que uma única query fixa.
-    """
-    product = requirements.product_type or 'produto'
-    budget_clause = f' até R${budget:.0f}' if budget else ''
-    priorities = ' '.join(requirements.priorities)
-    use_case = requirements.use_case or ''
-
-    queries = [
-        f'melhores {product} custo-benefício{budget_clause} 2026',
-        f'{product} {use_case} {priorities} review comparativo 2026'.strip(),
-    ]
-    if priorities:
-        queries.append(f'melhor {product} para {priorities}{budget_clause}')
-    if requirements.must_haves:
-        queries.append(
-            f'{product} com {" ".join(requirements.must_haves)}{budget_clause}'
-        )
-    if refine_hint:
-        queries.append(refine_hint)
-
-    # Remove duplicatas mantendo a ordem.
-    return list(dict.fromkeys(q for q in queries if q.strip()))
-
-
-async def search_candidates(
-    requirements: Requirements, budget: float | None, refine_hint: str | None = None
-) -> list[Product]:
-    """Encontra os 3 modelos de melhor custo-benefício para os requisitos informados.
-
-    Roda múltiplas buscas direcionadas no Tavily (custo-benefício, reviews/comparativos,
-    prioridades), agrega e deduplica os resultados, e extrai os candidatos via LLM.
-    `refine_hint` é usado no loop de re-busca quando os resultados anteriores
-    foram fracos.
-    """
+async def run_planned_searches(queries: list[str]) -> list[TavilyResult]:
+    """Executa (concorrentemente) as queries do plano e agrega/dedupe os resultados."""
     client = get_tavily_client()
-    queries = _build_search_queries(requirements, budget, refine_hint)
+    responses = await asyncio.gather(
+        *(
+            client.search(query, search_depth='advanced', country='brazil')
+            for query in queries
+        )
+    )
 
     aggregated: list[TavilyResult] = []
-    for query in queries:
-        response = cast(
-            TavilySearchResponse,
-            await client.search(query, search_depth='advanced', country='brazil'),
-        )
-        aggregated.extend(response.get('results', []))
+    for response in responses:
+        aggregated.extend(cast(TavilySearchResponse, response).get('results', []))
 
-    results = _dedupe_results(aggregated)[:_MAX_AGGREGATED_RESULTS]
+    return _dedupe_results(aggregated)[:_MAX_AGGREGATED_RESULTS]
+
+
+async def extract_candidates(
+    results: list[TavilyResult], requirements: Requirements, budget: float | None
+) -> list[Product]:
+    """Extrai os produtos de melhor custo-benefício a partir dos resultados de busca."""
     context = _format_results(results)
 
     llm = (
@@ -143,14 +109,32 @@ async def search_candidates(
     return recommendations.products
 
 
-async def deep_search_purchase_links(
+async def search_product_reviews(product: Product) -> str:
+    """Busca avaliações/reviews de um produto e devolve o contexto textual.
+
+    Usado na validação para o LLM julgar se o produto é bem avaliado.
+    """
+    client = get_tavily_client()
+    brand = f' {product.brand}' if product.brand else ''
+    response = cast(
+        TavilySearchResponse,
+        await client.search(
+            f'{product.name}{brand} avaliações reviews é bom vale a pena',
+            search_depth='advanced',
+            country='brazil',
+        ),
+    )
+    return _format_results(response.get('results', []))
+
+
+async def fetch_purchase_links(
     product: Product, quantity: int = 2
 ) -> list[PurchaseLink]:
-    """Pesquisa profunda de links de compra para um produto já escolhido pelo usuário.
+    """Busca links de compra para um produto (versão enxuta, sem extract pesado).
 
-    Primeiro faz uma busca avançada para localizar páginas de lojas e, em
-    seguida, usa o `extract` do Tavily para ler o conteúdo dessas páginas e
-    extrair link + preço com mais precisão do que apenas os snippets de busca.
+    Roda uma única busca por loja e extrai link + preço via LLM a partir dos snippets.
+    Diferente do fluxo antigo (um produto escolhido), aqui é chamada para vários
+    produtos em paralelo, então evita o `extract` do Tavily para controlar créditos.
     """
     client = get_tavily_client()
     response = cast(
@@ -161,28 +145,7 @@ async def deep_search_purchase_links(
             country='brazil',
         ),
     )
-
-    results = response.get('results', [])
-    context = _format_results(results)
-
-    # Lê as páginas das lojas mais relevantes para confirmar link e preço reais.
-    top_urls = [r['url'] for r in results[:quantity] if r.get('url')]
-
-    if top_urls:
-        try:
-            extracted = cast(TavilyExtractResponse, await client.extract(top_urls))
-            for item in extracted.get('results', []):
-                raw = item.get('raw_content') or ''
-                if raw:
-                    context += (
-                        f'\n\n[Conteúdo extraído de {item.get("url", "")}]:\n'
-                        f'{raw[:2000]}'
-                    )
-        except Exception:
-            # Se o extract falhar, seguimos apenas com os snippets da busca.
-            pass
-
-    # Alternativa mais robusta (e mais cara em créditos): client.research(...).
+    context = _format_results(response.get('results', []))
 
     system_message = FIND_PURCHASE_LINKS_PROMPT.format(quantity=quantity)
     human_message = HumanMessage(

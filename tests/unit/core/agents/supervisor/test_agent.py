@@ -2,13 +2,33 @@ import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 from pytest_mock import MockerFixture
 
-from app.core.agents.constants import Agents
+from app.core.agents.constants import Agents, Phase
 from app.core.agents.states import ChatState
 from app.core.agents.supervisor import agent as supervisor_agent
 from app.core.agents.supervisor.agent import build_supervisor_agent
 from app.core.agents.supervisor.prompt import SUPERVISOR_SYSTEM_PROMPT
 from app.core.agents.supervisor.schemas import Router
 from tests.utils import patch_structured_llm
+
+
+@pytest.mark.anyio
+async def test_phase_override_routes_to_owner_without_llm(
+    mocker: MockerFixture,
+) -> None:
+    # Fase ativa → roteia direto para o dono (products) sem chamar o LLM.
+    _, ainvoke, _ = patch_structured_llm(
+        mocker, supervisor_agent, structured_return=Router(next=Agents.GUIDE)
+    )
+
+    state: ChatState = {
+        'messages': [HumanMessage('2000 reais')],
+        'next': '',
+        'phase': Phase.PRODUCTS_COLLECTING.value,
+    }
+    result = await build_supervisor_agent(state)
+
+    assert result == {'next': Agents.PRODUCTS.value, 'messages': []}
+    ainvoke.assert_not_awaited()
 
 
 @pytest.mark.anyio

@@ -16,6 +16,24 @@ class Nodes(StrEnum):
     PRODUCTS = 'products'
 
 
+class Phase(StrEnum):
+    """Posição durável dentro de um fluxo multi-turno (turn-based, sem interrupt).
+
+    O valor é prefixado pelo agente dono (ver `PHASE_OWNER`) para que o supervisor
+    saiba, como dado, para onde re-rotear quando uma fase está ativa. O `phase`
+    referencia o agente; o passo interno é decisão do subgrafo.
+    """
+
+    PRODUCTS_COLLECTING = 'products:collecting'
+
+
+# Ownership explícito: a qual agente cada fase pertence. O override do supervisor
+# lê este mapa em vez de um `if` hardcoded — novo fluxo multi-turno = uma linha aqui.
+PHASE_OWNER: dict[Phase, Agents] = {
+    Phase.PRODUCTS_COLLECTING: Agents.PRODUCTS,
+}
+
+
 AGENTS_DESCRIPTION: dict[Agents, str] = {
     Agents.GUIDE: (
         'Agente que irá recepcionar e guiar o usuário, conduzirá a conversa '

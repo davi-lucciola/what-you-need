@@ -27,16 +27,45 @@ Regras:
 
 FIND_PRODUCTS_PROMPT = """
 Você é um especialista em produtos e custo-benefício. A partir dos resultados de busca
-fornecidos, identifique os 3 modelos de produto mais adequados para a necessidade e o
+fornecidos, identifique os 5 modelos de produto mais adequados para a necessidade e o
 orçamento do usuário.
 
 Regras:
-- Retorne exatamente 3 produtos, ordenados do melhor para o pior custo-benefício.
+- Retorne até 5 produtos, ordenados do melhor para o pior custo-benefício.
 - Considere apenas modelos cujo preço aproximado caiba no orçamento informado.
 - Baseie-se somente nas informações dos resultados; não invente modelos ou preços.
 - Para cada produto, preencha o motivo da indicação considerando as prioridades
   do usuário.
+- NÃO preencha os campos de avaliação (review_summary) nem de links de compra
+  (purchase_links) — eles são preenchidos depois pelo sistema.
 - Escreva os textos em português do Brasil.
+"""
+
+
+PLANNER_PROMPT = """
+Você é um planejador de pesquisa de produtos. A partir dos requisitos e do orçamento
+do usuário, gere um plano de busca: de 3 a 5 queries web complementares que, juntas,
+cubram os melhores modelos.
+
+Regras:
+- Use ângulos diferentes: custo-benefício, reviews/comparativos, prioridades do
+  usuário e alternativas bem avaliadas.
+- Inclua o ano corrente e faixa de orçamento quando fizer sentido.
+- Se receber uma dica de replanejamento (a busca anterior foi fraca), amplie o leque
+  com ângulos novos em vez de repetir as mesmas queries.
+- Escreva as queries em português do Brasil.
+"""
+
+
+REVIEW_VALIDATION_PROMPT = """
+Você avalia a reputação de um produto na internet. A partir dos resultados de busca
+sobre avaliações/reviews do produto informado, decida se ele é, no geral, bem avaliado.
+
+Regras:
+- Considere nota média, volume de avaliações e problemas recorrentes citados.
+- `well_rated` = true apenas se a reputação geral for claramente positiva.
+- `summary`: um resumo curto (1-2 frases) da reputação, em português do Brasil.
+- Baseie-se somente nos resultados fornecidos; não invente notas.
 """
 
 

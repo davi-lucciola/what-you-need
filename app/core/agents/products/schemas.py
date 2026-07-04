@@ -36,6 +36,22 @@ def parse_brl_price(value: object) -> Decimal | None:
         return None
 
 
+class PurchaseLink(BaseModel):
+    store: str = Field(
+        description='Loja do link, ex. "Amazon", "Mercado Livre", "Shopee".'
+    )
+    url: str = Field(description='URL direta para comprar o produto na loja.')
+    price: float | None = Field(
+        default=None, description='Preço anunciado em reais (BRL), se disponível.'
+    )
+
+    @field_validator('price', mode='before')
+    @classmethod
+    def _coerce_price(cls, value: object) -> float | None:
+        parsed = parse_brl_price(value)
+        return float(parsed) if parsed is not None else None
+
+
 class Product(BaseModel):
     name: str = Field(
         description='Nome/modelo do produto, ex. "Samsung Galaxy A17 5G".'
@@ -57,6 +73,16 @@ class Product(BaseModel):
         default_factory=list,
         description='Principais características do produto (ex. RAM, câmera, bateria).',
     )
+    # Preenchidos pelo sistema (não pelo extrator): review na validação, links na
+    # apresentação. Deixe vazios na extração.
+    review_summary: str | None = Field(
+        default=None,
+        description='NÃO preencher na extração — o sistema preenche na validação.',
+    )
+    purchase_links: list[PurchaseLink] = Field(
+        default_factory=list,
+        description='NÃO preencher na extração — o sistema preenche na apresentação.',
+    )
 
     @field_validator('estimated_price', mode='before')
     @classmethod
@@ -67,25 +93,28 @@ class Product(BaseModel):
 class ProductRecommendations(BaseModel):
     products: list[Product] = Field(
         description=(
-            'Lista com os 3 produtos mais adequados, ordenados por custo-benefício.'
+            'Lista com os 5 produtos mais adequados, ordenados por custo-benefício.'
         )
     )
 
 
-class PurchaseLink(BaseModel):
-    store: str = Field(
-        description='Loja do link, ex. "Amazon", "Mercado Livre", "Shopee".'
-    )
-    url: str = Field(description='URL direta para comprar o produto na loja.')
-    price: float | None = Field(
-        default=None, description='Preço anunciado em reais (BRL), se disponível.'
+class SearchPlan(BaseModel):
+    queries: list[str] = Field(
+        description=(
+            'De 3 a 5 queries de busca web complementares (ângulos diferentes: '
+            'custo-benefício, reviews/comparativos, prioridades, alternativas) para '
+            'encontrar os melhores produtos para o usuário.'
+        )
     )
 
-    @field_validator('price', mode='before')
-    @classmethod
-    def _coerce_price(cls, value: object) -> float | None:
-        parsed = parse_brl_price(value)
-        return float(parsed) if parsed is not None else None
+
+class ReviewVerdict(BaseModel):
+    well_rated: bool = Field(
+        description='True se o produto é, no geral, bem avaliado na internet.'
+    )
+    summary: str = Field(
+        description='Resumo curto das avaliações online (nota geral e pontos citados).'
+    )
 
 
 class PurchaseLinks(BaseModel):
@@ -176,12 +205,3 @@ class CollectedInfo(BaseModel):
             brand_preferences=self.brand_preferences,
             must_haves=self.must_haves,
         )
-
-
-class ProductChoice(BaseModel):
-    index: int = Field(
-        description=(
-            'Número (1 a N) do produto escolhido pelo usuário. Use 1 se ele '
-            'pedir o mais recomendado ou não especificar claramente.'
-        )
-    )

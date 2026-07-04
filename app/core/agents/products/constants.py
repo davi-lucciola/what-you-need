@@ -8,7 +8,7 @@ class Nodes(StrEnum):
     """
 
     COLLECT = 'collect_requirements'
-    SEARCH = 'search_products'
+    PLAN = 'plan_search'
+    EXECUTE = 'execute_search'
     VALIDATE = 'validate_products'
     PRESENT = 'present_recommendations'
-    LINKS = 'search_purchase_links'
