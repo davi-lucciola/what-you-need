@@ -1,9 +1,6 @@
-from typing import Any
-
 from fastapi import APIRouter, Depends
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import Agent, get_agent
@@ -21,13 +18,9 @@ async def chat(
 ) -> EventSourceResponse:
     config: RunnableConfig = {'configurable': {'thread_id': thread_id}}
 
-    snapshot = await agent.aget_state(config)
-    pending = bool(getattr(snapshot, 'interrupts', None))
-
-    graph_input: Any = (
-        Command(resume=req.message)
-        if pending
-        else {'messages': [HumanMessage(req.message)], 'next': ''}
-    )
+    # Turn-based: todo turno é uma mensagem nova rodando START→END. A posição no
+    # fluxo multi-turno vive no `phase` do state (lida pelo supervisor), então não
+    # há mais interrupt para retomar via Command(resume=...).
+    graph_input = {'messages': [HumanMessage(req.message)], 'next': ''}
 
     return EventSourceResponse(chat_service.event_stream(agent, graph_input, config))

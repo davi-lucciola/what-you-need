@@ -1,4 +1,3 @@
-import json
 from typing import Any, AsyncGenerator, cast
 
 from langchain_core.messages import AIMessage, AIMessageChunk
@@ -8,27 +7,11 @@ from app.api.deps import Agent
 from app.core.agents.constants import Nodes
 
 
-def _interrupt_value(mode: str, payload: Any) -> Any:
-    """Extrai o payload do interrupt de um item do astream, ou None.
-
-    Espelha o `_pending_interrupt` do `main.py`, mas lendo do stream em vez do
-    resultado final: no `stream_mode='updates'` o chunk de pausa vem com a chave
-    `__interrupt__`.
-    """
-    if mode == 'updates' and isinstance(payload, dict) and '__interrupt__' in payload:
-        interrupts = payload['__interrupt__']
-
-        if interrupts:
-            return interrupts[0].value
-
-    return None
-
-
 async def _final_message(agent: Agent, config: RunnableConfig) -> str | None:
     """Texto autoritativo do turno: a última AIMessage com conteúdo.
 
-    Mesma regra do `_render` do `main.py`. Garante a entrega de mensagens
-    montadas sem LLM (ex.: links de compra), que não geram tokens no stream.
+    Garante a entrega de mensagens montadas sem LLM (ex.: apresentação com links),
+    que não geram tokens no stream.
     """
     snapshot = await agent.aget_state(config)
     messages = snapshot.values.get('messages', [])
@@ -42,36 +25,26 @@ async def _final_message(agent: Agent, config: RunnableConfig) -> str | None:
 async def event_stream(
     agent: Agent, graph_input: Any, config: RunnableConfig
 ) -> AsyncGenerator[dict[str, str]]:
-    interrupted = False
-
-    async for mode, payload in agent.astream(
-        graph_input, config, stream_mode=['messages', 'updates']
+    # Turn-based: o grafo roda START→END sem pausas. Só emitimos os tokens
+    # incrementais (preview ao vivo) e, no fim, a mensagem final autoritativa.
+    async for chunk, metadata in agent.astream(
+        graph_input, config, stream_mode='messages'
     ):
-        interrupt = _interrupt_value(mode, payload)
-        if interrupt is not None:
-            # Turno pausou esperando input: emite a pergunta e encerra o stream.
-            interrupted = True
-            yield {'event': 'interrupt', 'data': json.dumps(interrupt)}
-            break
+        meta = cast(dict[str, Any], metadata)
+        # `token` = texto incremental. Pula o supervisor, cujo structured-output de
+        # roteamento sairia como JSON cru.
+        if (
+            isinstance(chunk, AIMessageChunk)
+            and chunk.text
+            and meta.get('langgraph_node') != Nodes.SUPERVISOR
+        ):
+            yield {'event': 'token', 'data': chunk.text}
 
-        if mode == 'messages':
-            chunk = payload[0]
-            metadata = cast(dict[str, Any], payload[1])
-            # `token` = texto incremental (preview ao vivo). Pula o supervisor,
-            # cujo structured-output de roteamento sairia como JSON cru.
-            if (
-                isinstance(chunk, AIMessageChunk)
-                and chunk.text
-                and metadata.get('langgraph_node') != Nodes.SUPERVISOR
-            ):
-                yield {'event': 'token', 'data': chunk.text}
+    # `message` = texto final autoritativo (o cliente pode substituir os tokens
+    # incrementais por ele).
+    text = await _final_message(agent, config)
 
-    if not interrupted:
-        # `message` = texto final autoritativo do turno concluído (o cliente pode
-        # substituir os tokens incrementais por ele).
-        text = await _final_message(agent, config)
-
-        if text:
-            yield {'event': 'message', 'data': text}
+    if text:
+        yield {'event': 'message', 'data': text}
 
     yield {'event': 'done', 'data': ''}
