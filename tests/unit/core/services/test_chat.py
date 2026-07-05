@@ -8,6 +8,7 @@ from pytest_mock import MockerFixture
 from app.core.agents.constants import Nodes
 from app.core.services.chat import (
     _final_message,  # pyright: ignore[reportPrivateUsage]
+    _is_streamable_token,  # pyright: ignore[reportPrivateUsage]
     event_stream,
 )
 
@@ -109,6 +110,28 @@ async def test_event_stream_emits_token_message_done(mocker: MockerFixture) -> N
         {'event': 'message', 'data': 'Olá, tudo bem?'},
         {'event': 'done', 'data': ''},
     ]
+
+
+def test_is_streamable_skips_products_agent_internals() -> None:
+    chunk = AIMessageChunk(content='pensando...')
+    # Raciocínio interno do ReAct agent de produtos (identificado pelo namespace).
+    meta = {
+        'langgraph_node': 'model',
+        'langgraph_checkpoint_ns': f'{Nodes.PRODUCTS}:1|model:2',
+    }
+    assert _is_streamable_token(chunk, meta) is False
+
+
+def test_is_streamable_skips_products_node() -> None:
+    chunk = AIMessageChunk(content='Que produto você procura?')
+    meta = {'langgraph_node': Nodes.PRODUCTS, 'langgraph_checkpoint_ns': ''}
+    assert _is_streamable_token(chunk, meta) is False
+
+
+def test_is_streamable_allows_regular_agent_tokens() -> None:
+    chunk = AIMessageChunk(content='Olá')
+    meta = {'langgraph_node': Nodes.GUIDE, 'langgraph_checkpoint_ns': 'guide:1'}
+    assert _is_streamable_token(chunk, meta) is True
 
 
 @pytest.mark.anyio

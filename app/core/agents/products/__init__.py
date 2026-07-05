@@ -1,5 +1,5 @@
-from app.core.agents.products.agent import build_product_search_agent
+from app.core.agents.products.agent import product_agent
 
 
 def build_product_search_node():
-    return build_product_search_agent()
+    return product_agent

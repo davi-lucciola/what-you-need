@@ -24,13 +24,13 @@ class Phase(StrEnum):
     referencia o agente; o passo interno é decisão do subgrafo.
     """
 
-    PRODUCTS_COLLECTING = 'products:collecting'
+    PRODUCTS_ACTIVE = 'products:active'
 
 
 # Ownership explícito: a qual agente cada fase pertence. O override do supervisor
 # lê este mapa em vez de um `if` hardcoded — novo fluxo multi-turno = uma linha aqui.
 PHASE_OWNER: dict[Phase, Agents] = {
-    Phase.PRODUCTS_COLLECTING: Agents.PRODUCTS,
+    Phase.PRODUCTS_ACTIVE: Agents.PRODUCTS,
 }
 
 

@@ -23,7 +23,7 @@ async def test_phase_override_routes_to_owner_without_llm(
     state: ChatState = {
         'messages': [HumanMessage('2000 reais')],
         'next': '',
-        'phase': Phase.PRODUCTS_COLLECTING.value,
+        'phase': Phase.PRODUCTS_ACTIVE.value,
     }
     result = await build_supervisor_agent(state)
 
