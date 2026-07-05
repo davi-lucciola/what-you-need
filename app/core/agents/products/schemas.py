@@ -73,16 +73,34 @@ class Product(BaseModel):
         default_factory=list,
         description='Principais características do produto (ex. RAM, câmera, bateria).',
     )
-    # Preenchidos pelo sistema (não pelo extrator): review na validação, links na
-    # apresentação. Deixe vazios na extração.
+    unmet_requirements: list[str] = Field(
+        default_factory=list,
+        description=(
+            'Requisitos do usuário que este produto NÃO atende '
+            '(ex. ["à prova d\'água"]). Preencha quando não houver opção que cumpra '
+            'todos os requisitos, para a recomendação nunca ficar vazia. Deixe [] se '
+            'o produto atende a tudo.'
+        ),
+    )
+    # Preenchidos pelo sistema (não pelo extrator): review/disponibilidade na validação,
+    # links na apresentação. Deixe vazios/None na extração.
     review_summary: str | None = Field(
         default=None,
         description='NÃO preencher na extração — o sistema preenche na validação.',
+    )
+    available: bool | None = Field(
+        default=None,
+        description='NÃO preencher na extração — o sistema confirma na validação.',
     )
     purchase_links: list[PurchaseLink] = Field(
         default_factory=list,
         description='NÃO preencher na extração — o sistema preenche na apresentação.',
     )
+
+    @field_validator('unmet_requirements', mode='before')
+    @classmethod
+    def _coerce_unmet_none_to_empty(cls, value: object) -> object:
+        return value if value is not None else []
 
     @field_validator('estimated_price', mode='before')
     @classmethod
@@ -94,16 +112,6 @@ class ProductRecommendations(BaseModel):
     products: list[Product] = Field(
         description=(
             'Lista com os 5 produtos mais adequados, ordenados por custo-benefício.'
-        )
-    )
-
-
-class SearchPlan(BaseModel):
-    queries: list[str] = Field(
-        description=(
-            'De 3 a 5 queries de busca web complementares (ângulos diferentes: '
-            'custo-benefício, reviews/comparativos, prioridades, alternativas) para '
-            'encontrar os melhores produtos para o usuário.'
         )
     )
 
@@ -123,85 +131,20 @@ class PurchaseLinks(BaseModel):
     )
 
 
-class Requirements(BaseModel):
-    product_type: str | None = Field(
-        default=None,
-        description='Tipo/categoria do produto procurado, ex. "celular", "notebook".',
-    )
-    use_case: str | None = Field(
-        default=None,
+class ListingVerdict(BaseModel):
+    available: bool = Field(
         description=(
-            'Para que o usuário vai usar o produto, ex. "tirar fotos", "jogar".'
-        ),
-    )
-    priorities: list[str] = Field(
-        default_factory=list,
-        description=(
-            'Características mais importantes para o usuário, '
-            'ex. ["câmera", "bateria"].'
-        ),
-    )
-    brand_preferences: list[str] = Field(
-        default_factory=list,
-        description='Marcas preferidas ou a evitar informadas pelo usuário.',
-    )
-    must_haves: list[str] = Field(
-        default_factory=list,
-        description=(
-            'Requisitos obrigatórios/inegociáveis, ex. ["5G", "à prova d\'água"].'
-        ),
-    )
-
-    @field_validator('priorities', 'brand_preferences', 'must_haves', mode='before')
-    @classmethod
-    def _coerce_none_to_empty_list(cls, value: object) -> object:
-        # O LLM costuma emitir null em vez de [] quando o campo está vazio.
-        return value if value is not None else []
-
-    @property
-    def is_complete(self) -> bool:
-        """Há dados suficientes para iniciar a busca.
-
-        Requer tipo de produto + (uso ou prioridade).
-        """
-        return bool(self.product_type) and bool(self.use_case or self.priorities)
-
-
-class CollectedInfo(BaseModel):
-    """Modelo achatado de extração (modelos menores erram com schema aninhado)."""
-
-    product_type: str | None = Field(
-        default=None, description='Tipo/categoria do produto, ex. "celular".'
-    )
-    use_case: str | None = Field(
-        default=None, description='Para que o usuário vai usar o produto.'
-    )
-    priorities: list[str] = Field(
-        default_factory=list, description='Características mais importantes.'
-    )
-    brand_preferences: list[str] = Field(
-        default_factory=list, description='Marcas preferidas ou a evitar.'
-    )
-    must_haves: list[str] = Field(
-        default_factory=list, description='Requisitos obrigatórios.'
-    )
-    budget: float | None = Field(
-        default=None,
-        description=(
-            'Orçamento máximo do usuário em reais (BRL), se informado. Null se não.'
-        ),
-    )
-
-    @field_validator('priorities', 'brand_preferences', 'must_haves', mode='before')
-    @classmethod
-    def _coerce_none_to_empty_list(cls, value: object) -> object:
-        return value if value is not None else []
-
-    def to_requirements(self) -> Requirements:
-        return Requirements(
-            product_type=self.product_type,
-            use_case=self.use_case,
-            priorities=self.priorities,
-            brand_preferences=self.brand_preferences,
-            must_haves=self.must_haves,
+            'True se o anúncio está no ar e o produto disponível para compra '
+            '(não "indisponível", "esgotado" nem página de erro/404).'
         )
+    )
+    price: float | None = Field(
+        default=None,
+        description='Preço anunciado em reais (BRL) extraído da página, se disponível.',
+    )
+
+    @field_validator('price', mode='before')
+    @classmethod
+    def _coerce_price(cls, value: object) -> float | None:
+        parsed = parse_brl_price(value)
+        return float(parsed) if parsed is not None else None

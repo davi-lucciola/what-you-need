@@ -1,14 +1,7 @@
-from app.core.agents.products.agent import build_product_search_agent
-from app.core.agents.products.constants import Nodes
+from app.core.agents.products import build_product_search_node
+from app.core.agents.products.agent import product_agent_node
 
 
-def test_compiles_subgraph_with_all_nodes() -> None:
-    graph = build_product_search_agent()
-
-    node_names = set(graph.get_graph().nodes)
-
-    for node in Nodes:
-        assert node.value in node_names
-
-    assert '__start__' in node_names
-    assert '__end__' in node_names
+def test_build_product_search_node_returns_the_agent_node() -> None:
+    # O nó de produtos agora é uma única função (ReAct agent), não um subgrafo.
+    assert build_product_search_node() is product_agent_node
